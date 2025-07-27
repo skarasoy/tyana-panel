@@ -20,7 +20,7 @@ if not st.session_state.authenticated:
         if submitted:
             if password == "gizli123":  # ŞİFREN BURADA
                 st.session_state.authenticated = True
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("❌ Hatalı şifre")
     st.stop()
