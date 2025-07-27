@@ -125,9 +125,7 @@ with right:
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
 from statsmodels.tsa.arima.model import ARIMA
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Input
-from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+
 
 st.markdown("---")
 st.subheader("🔮 5 Günlük Fiyat Tahminleri")
