@@ -7,9 +7,6 @@ import os
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
 from statsmodels.tsa.arima.model import ARIMA
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Input
-from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 
 
 # Şifre koruması (tüm sayfalarda ortak)
@@ -134,7 +131,7 @@ from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 
 st.markdown("---")
 st.subheader("🔮 5 Günlük Fiyat Tahminleri")
-tab_arima, tab_xgb, tab_lstm = st.tabs(["ARIMA", "XGBoost", "LSTM"])
+tab_arima, tab_xgb = st.tabs(["ARIMA", "XGBoost"])
 
 future_days = 5
 latest_price = close.iloc[-1]
@@ -178,27 +175,6 @@ with tab_xgb:
         st.metric("Tahmin", f"{xgb_pred:.2f}", delta=f"{xgb_pred - latest_price:.2f}")
     except Exception as e:
         st.warning(f"XGBoost modeli başarısız oldu: {e}")
-
-# LSTM
-with tab_lstm:
-    try:
-        seq_length = 10
-        lstm_model = Sequential()
-        lstm_model.add(Input(shape=(seq_length, 1)))
-        lstm_model.add(LSTM(50, activation="relu"))
-        lstm_model.add(Dense(1))
-        lstm_model.compile(optimizer="adam", loss="mse")
-
-        generator = TimeseriesGenerator(
-            data_np, data_np, length=seq_length, batch_size=1
-        )
-        lstm_model.fit(generator, epochs=5, verbose=0)
-
-        lstm_input = data_np[-seq_length:].reshape((1, seq_length, 1))
-        lstm_pred = lstm_model.predict(lstm_input, verbose=0)[0][0]
-        st.metric("Tahmin", f"{lstm_pred:.2f}", delta=f"{lstm_pred - latest_price:.2f}")
-    except Exception as e:
-        st.warning(f"LSTM modeli başarısız oldu: {e}")
 
 
 # ---------------- Teknik Analiz -------------------
