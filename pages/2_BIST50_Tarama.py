@@ -76,7 +76,7 @@ for i, hisse in enumerate(bist30_list):
         if ema20 > ema50:
             score += 1
 
-        if score >= 2:
+        if score >= 0:
             sinyal_listesi.append((hisse, rsi, ema20, ema50))
     except:
         continue

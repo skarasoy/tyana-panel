@@ -16,26 +16,8 @@ import random
 from typing import Optional, Dict, List, Tuple
 from io import BytesIO
 
-# TensorFlow import'u - hata durumunda atla
-try:
-    import tensorflow as tf
-
-    TF_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️ TensorFlow yüklenemedi: {str(e)}")
-    print("📊 LSTM tahminleri devre dışı, diğer özellikler çalışacak")
-    TF_AVAILABLE = False
-    tf = None
-
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
-
-# Yeni AI modülleri için eklemeler
-from textblob import TextBlob
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from sklearn.ensemble import VotingRegressor, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-import shap
 
 # Performans için uyarıları kapat
 warnings.filterwarnings("ignore")
@@ -88,495 +70,6 @@ class RateLimitedDataFetcher:
                     logger.error(f"Failed to fetch {symbol}: {str(e)}")
 
         return None
-
-
-class AdvancedAIAnalyzer:
-    """Gelişmiş AI analiz sınıfı"""
-
-    def __init__(self):
-        self.models = {}
-        self.ensemble_weights = {}
-        self.confidence_threshold = 0.7
-
-    def create_ensemble_model(self, X, y):
-        """Ensemble model oluştur"""
-        try:
-            # Base models
-            rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-            xgb_model = XGBRegressor(n_estimators=100, random_state=42)
-            lr_model = LinearRegression()
-
-            # Ensemble
-            ensemble = VotingRegressor(
-                [("rf", rf_model), ("xgb", xgb_model), ("lr", lr_model)]
-            )
-
-            ensemble.fit(X, y)
-            return ensemble
-
-        except Exception as e:
-            st.error(f"Ensemble model oluşturulurken hata: {str(e)}")
-            return None
-
-    def calculate_model_confidence(self, model, X_test, y_test):
-        """Model güven skorunu hesapla"""
-        try:
-            predictions = model.predict(X_test)
-            mse = np.mean((y_test - predictions) ** 2)
-            mae = np.mean(np.abs(y_test - predictions))
-
-            # Normalize confidence (0-1 arası)
-            confidence = max(0, min(1, 1 - (mae / np.mean(np.abs(y_test)))))
-            return confidence
-
-        except:
-            return 0.5
-
-    def feature_importance_analysis(self, model, feature_names):
-        """Feature importance analizi"""
-        try:
-            if hasattr(model, "feature_importances_"):
-                importance = model.feature_importances_
-                return dict(zip(feature_names, importance))
-            return {}
-        except:
-            return {}
-
-
-class MacroEconomicAnalyzer:
-    """Makroekonomik analiz modülü"""
-
-    def __init__(self):
-        self.indicators = {}
-
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def fetch_macro_data(_self):
-        """Makroekonomik verileri çek"""
-        macro_data = {}
-
-        try:
-            # USD/TRY
-            try:
-                usd_try = yf.download(
-                    "TRY=X", period="1mo", progress=False, threads=False
-                )
-                if (
-                    isinstance(usd_try, pd.DataFrame)
-                    and len(usd_try) > 0
-                    and not usd_try.empty
-                ):
-                    macro_data["usd_try"] = float(usd_try["Close"].iloc[-1])
-                    if len(usd_try) >= 2:
-                        macro_data["usd_try_change"] = float(
-                            (
-                                (usd_try["Close"].iloc[-1] / usd_try["Close"].iloc[-2])
-                                - 1
-                            )
-                            * 100
-                        )
-            except Exception as e:
-                print(f"USD/TRY hatası: {e}")
-
-            # BIST100
-            try:
-                bist100 = yf.download(
-                    "XU100.IS", period="1mo", progress=False, threads=False
-                )
-                if (
-                    isinstance(bist100, pd.DataFrame)
-                    and len(bist100) > 0
-                    and not bist100.empty
-                ):
-                    macro_data["bist100"] = float(bist100["Close"].iloc[-1])
-                    if len(bist100) >= 2:
-                        macro_data["bist100_change"] = float(
-                            (
-                                (bist100["Close"].iloc[-1] / bist100["Close"].iloc[-2])
-                                - 1
-                            )
-                            * 100
-                        )
-            except Exception as e:
-                print(f"BIST100 hatası: {e}")
-
-            # Altın
-            try:
-                gold = yf.download("GC=F", period="1mo", progress=False, threads=False)
-                if isinstance(gold, pd.DataFrame) and len(gold) > 0 and not gold.empty:
-                    macro_data["gold"] = float(gold["Close"].iloc[-1])
-                    if len(gold) >= 2:
-                        macro_data["gold_change"] = float(
-                            ((gold["Close"].iloc[-1] / gold["Close"].iloc[-2]) - 1)
-                            * 100
-                        )
-            except Exception as e:
-                print(f"Altın hatası: {e}")
-
-            # VIX
-            try:
-                vix = yf.download("^VIX", period="1mo", progress=False, threads=False)
-                if isinstance(vix, pd.DataFrame) and len(vix) > 0 and not vix.empty:
-                    macro_data["vix"] = float(vix["Close"].iloc[-1])
-                    if len(vix) >= 2:
-                        macro_data["vix_change"] = float(
-                            ((vix["Close"].iloc[-1] / vix["Close"].iloc[-2]) - 1) * 100
-                        )
-            except Exception as e:
-                print(f"VIX hatası: {e}")
-
-        except Exception as e:
-            print(f"Genel makro veri hatası: {e}")
-
-        return macro_data
-
-    def analyze_macro_impact(self, symbol, macro_data):
-        """Makroekonomik etki analizi"""
-        impact_score = 0
-        analysis = []
-
-        # BIST hissesi kontrolü
-        is_turkish = symbol.endswith(".IS")
-
-        if is_turkish and "usd_try_change" in macro_data:
-            usd_change = macro_data["usd_try_change"]
-            if abs(usd_change) > 2:
-                if usd_change > 0:
-                    impact_score -= 0.5
-                    analysis.append(
-                        f"⚠️ USD/TRY %{usd_change:.2f} yükseldi - Olumsuz etki"
-                    )
-                else:
-                    impact_score += 0.5
-                    analysis.append(
-                        f"✅ USD/TRY %{abs(usd_change):.2f} düştü - Olumlu etki"
-                    )
-
-        if "vix" in macro_data:
-            vix_level = macro_data["vix"]
-            if vix_level > 25:
-                impact_score -= 0.3
-                analysis.append(f"⚠️ VIX yüksek ({vix_level:.1f}) - Piyasa gerginliği")
-            elif vix_level < 15:
-                impact_score += 0.3
-                analysis.append(f"✅ VIX düşük ({vix_level:.1f}) - Piyasa sakin")
-
-        return impact_score, analysis
-
-
-class SentimentAnalyzer:
-    """Sentiment analizi modülü"""
-
-    @st.cache_data(ttl=1800)
-    def analyze_market_sentiment(_self, symbol):
-        """Market sentiment analizi"""
-        sentiment_score = 0
-        sentiment_text = []
-
-        try:
-            # Basit sentiment simülasyonu (gerçek uygulamada news API kullanılır)
-            import random
-
-            sentiment_score = random.uniform(-1, 1)
-
-            if sentiment_score > 0.3:
-                sentiment_text.append("📈 Pozitif haber akışı")
-            elif sentiment_score < -0.3:
-                sentiment_text.append("📉 Negatif haber akışı")
-            else:
-                sentiment_text.append("😐 Nötr haber akışı")
-
-        except:
-            sentiment_score = 0
-            sentiment_text.append("❓ Sentiment verisi alınamadı")
-
-        return sentiment_score, sentiment_text
-
-
-class RiskManager:
-    """Gelişmiş risk yönetimi"""
-
-    def calculate_var(self, returns, confidence_level=0.05):
-        """Value at Risk hesaplama"""
-        try:
-            var = np.percentile(returns, confidence_level * 100)
-            return var
-        except:
-            return None
-
-    def calculate_sharpe_ratio(self, returns, risk_free_rate=0.02):
-        """Sharpe ratio hesaplama"""
-        try:
-            excess_returns = returns - risk_free_rate / 252  # Günlük risk-free rate
-            sharpe = np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252)
-            return sharpe
-        except:
-            return None
-
-    def calculate_max_drawdown(self, prices):
-        """Maksimum düşüş hesaplama"""
-        try:
-            cumulative = (1 + prices.pct_change()).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = (cumulative - rolling_max) / rolling_max
-            max_dd = drawdown.min()
-            return max_dd
-        except:
-            return None
-
-    def portfolio_correlation_analysis(self, symbols):
-        """Portföy korelasyon analizi"""
-        correlations = {}
-        try:
-            for i, symbol1 in enumerate(symbols):
-                for symbol2 in symbols[i + 1 :]:
-                    data1 = yf.download(symbol1, period="3mo", progress=False)["Close"]
-                    data2 = yf.download(symbol2, period="3mo", progress=False)["Close"]
-
-                    if not data1.empty and not data2.empty:
-                        # Align dates
-                        combined = pd.concat([data1, data2], axis=1).dropna()
-                        if len(combined) > 30:
-                            corr = combined.iloc[:, 0].corr(combined.iloc[:, 1])
-                            correlations[f"{symbol1}-{symbol2}"] = corr
-        except:
-            pass
-
-        return correlations
-
-
-# ==============================================================================
-# MEVCUT KODUN GELİŞTİRİLMİŞ VERSİYONU
-# ==============================================================================
-
-
-class EnhancedRateLimitedDataFetcher(RateLimitedDataFetcher):
-    """Geliştirilmiş veri çekme sınıfı"""
-
-    def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
-        super().__init__(max_retries, base_delay)
-        self.alternative_sources = ["yahoo", "alpha_vantage", "finnhub"]
-
-    def fetch_with_fallback(self, symbol: str, period: str = "3mo"):
-        """Fallback mekanizmalı veri çekme"""
-        for source in self.alternative_sources:
-            try:
-                if source == "yahoo":
-                    return self.fetch_stock_data(symbol, period)
-                # Diğer kaynaklar eklenebilir
-            except:
-                continue
-        return None
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def enhanced_technical_analysis(close_series, high_series, low_series, volume_series):
-    """Geliştirilmiş teknik analiz"""
-    indicators = {}
-    signal_score = 0
-    signal_total = 0
-
-    # Mevcut göstergelere ek olarak:
-
-    try:
-        # Parabolic SAR
-        psar = ta.trend.PSARIndicator(
-            high=high_series, low=low_series, close=close_series
-        )
-        psar_value = psar.psar()
-        if not psar_value.empty:
-            indicators["PSAR"] = psar_value.iloc[-1]
-            current_price = close_series.iloc[-1]
-            if current_price > psar_value.iloc[-1]:
-                signal_score += 0.5
-                indicators["PSAR_Signal"] = "AL"
-            else:
-                signal_score -= 0.5
-                indicators["PSAR_Signal"] = "SAT"
-            signal_total += 0.5
-
-        # Williams %R
-        williams_r = ta.momentum.WilliamsRIndicator(
-            high=high_series, low=low_series, close=close_series
-        )
-        wr_value = williams_r.williams_r()
-        if not wr_value.empty:
-            indicators["Williams_R"] = wr_value.iloc[-1]
-            if wr_value.iloc[-1] < -80:
-                signal_score += 1
-                indicators["Williams_R_Signal"] = "Aşırı Satım - AL"
-            elif wr_value.iloc[-1] > -20:
-                signal_score -= 1
-                indicators["Williams_R_Signal"] = "Aşırı Alım - SAT"
-            else:
-                indicators["Williams_R_Signal"] = "Normal"
-            signal_total += 1
-
-        # Money Flow Index
-        if volume_series is not None and not volume_series.isna().all():
-            mfi = ta.volume.MFIIndicator(
-                high=high_series,
-                low=low_series,
-                close=close_series,
-                volume=volume_series,
-            )
-            mfi_value = mfi.money_flow_index()
-            if not mfi_value.empty:
-                indicators["MFI"] = mfi_value.iloc[-1]
-                if mfi_value.iloc[-1] < 20:
-                    signal_score += 1
-                    indicators["MFI_Signal"] = "Aşırı Satım - AL"
-                elif mfi_value.iloc[-1] > 80:
-                    signal_score -= 1
-                    indicators["MFI_Signal"] = "Aşırı Alım - SAT"
-                else:
-                    indicators["MFI_Signal"] = "Normal"
-                signal_total += 1
-
-        # Aroon
-        aroon = ta.trend.AroonIndicator(high=high_series, low=low_series)
-        aroon_up = aroon.aroon_up()
-        aroon_down = aroon.aroon_down()
-        if not aroon_up.empty and not aroon_down.empty:
-            indicators["Aroon_Up"] = aroon_up.iloc[-1]
-            indicators["Aroon_Down"] = aroon_down.iloc[-1]
-
-            if aroon_up.iloc[-1] > aroon_down.iloc[-1] and aroon_up.iloc[-1] > 70:
-                signal_score += 0.5
-                indicators["Aroon_Signal"] = "Güçlü Yükseliş"
-            elif aroon_down.iloc[-1] > aroon_up.iloc[-1] and aroon_down.iloc[-1] > 70:
-                signal_score -= 0.5
-                indicators["Aroon_Signal"] = "Güçlü Düşüş"
-            else:
-                indicators["Aroon_Signal"] = "Belirsiz"
-            signal_total += 0.5
-
-        # Ichimoku
-        ichimoku = ta.trend.IchimokuIndicator(high=high_series, low=low_series)
-        tenkan = ichimoku.ichimoku_conversion_line()
-        kijun = ichimoku.ichimoku_base_line()
-
-        if not tenkan.empty and not kijun.empty:
-            indicators["Ichimoku_Tenkan"] = tenkan.iloc[-1]
-            indicators["Ichimoku_Kijun"] = kijun.iloc[-1]
-
-            current_price = close_series.iloc[-1]
-            if (
-                current_price > tenkan.iloc[-1]
-                and current_price > kijun.iloc[-1]
-                and tenkan.iloc[-1] > kijun.iloc[-1]
-            ):
-                signal_score += 1
-                indicators["Ichimoku_Signal"] = "Güçlü AL"
-            elif (
-                current_price < tenkan.iloc[-1]
-                and current_price < kijun.iloc[-1]
-                and tenkan.iloc[-1] < kijun.iloc[-1]
-            ):
-                signal_score -= 1
-                indicators["Ichimoku_Signal"] = "Güçlü SAT"
-            else:
-                indicators["Ichimoku_Signal"] = "Nötr"
-            signal_total += 1
-
-    except Exception as e:
-        st.error(f"Gelişmiş teknik analiz hatası: {str(e)}")
-
-    return indicators, signal_score, signal_total
-
-
-@st.cache_data(ttl=300)
-def advanced_predictions(
-    close_series, high_series, low_series, volume_series, future_days=5
-):
-    """Gelişmiş tahmin modeli"""
-    ai_analyzer = AdvancedAIAnalyzer()
-    predictions = {}
-
-    try:
-        # Feature engineering
-        df = pd.DataFrame(
-            {
-                "close": close_series,
-                "high": high_series,
-                "low": low_series,
-                "volume": volume_series if volume_series is not None else 0,
-            }
-        )
-
-        # Technical indicators as features
-        df["rsi"] = ta.momentum.RSIIndicator(close=df["close"]).rsi()
-        df["macd"] = ta.trend.MACD(close=df["close"]).macd()
-        df["bb_upper"] = ta.volatility.BollingerBands(
-            close=df["close"]
-        ).bollinger_hband()
-        df["bb_lower"] = ta.volatility.BollingerBands(
-            close=df["close"]
-        ).bollinger_lband()
-        df["atr"] = ta.volatility.AverageTrueRange(
-            high=df["high"], low=df["low"], close=df["close"]
-        ).average_true_range()
-
-        # Price-based features
-        df["sma_20"] = df["close"].rolling(20).mean()
-        df["sma_50"] = df["close"].rolling(50).mean()
-        df["returns"] = df["close"].pct_change()
-        df["volatility"] = df["returns"].rolling(20).std()
-
-        # Lag features
-        for lag in [1, 2, 3, 5]:
-            df[f"close_lag_{lag}"] = df["close"].shift(lag)
-            df[f"returns_lag_{lag}"] = df["returns"].shift(lag)
-
-        # Target variable
-        df["target"] = df["close"].shift(-future_days)
-
-        # Clean data
-        df_clean = df.dropna()
-
-        if len(df_clean) > 100:  # Yeterli veri varsa
-            feature_cols = [
-                col
-                for col in df_clean.columns
-                if col not in ["target", "close", "high", "low", "volume"]
-            ]
-            X = df_clean[feature_cols].values
-            y = df_clean["target"].values
-
-            # Train/test split
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
-
-            # Ensemble model
-            ensemble_model = ai_analyzer.create_ensemble_model(X_train, y_train)
-
-            if ensemble_model:
-                # Model confidence
-                confidence = ai_analyzer.calculate_model_confidence(
-                    ensemble_model, X_test, y_test
-                )
-
-                # Prediction
-                last_features = df_clean[feature_cols].iloc[-1].values.reshape(1, -1)
-                ensemble_pred = ensemble_model.predict(last_features)[0]
-
-                predictions["ensemble"] = {
-                    "value": ensemble_pred,
-                    "delta": ensemble_pred - close_series.iloc[-1],
-                    "confidence": confidence,
-                    "model_type": "Ensemble (RF+XGB+LR)",
-                }
-
-                # Feature importance
-                importance = ai_analyzer.feature_importance_analysis(
-                    ensemble_model, feature_cols
-                )
-                predictions["feature_importance"] = importance
-
-    except Exception as e:
-        st.error(f"Gelişmiş tahmin hatası: {str(e)}")
-
-    return predictions
 
 
 # ==============================================================================
@@ -815,58 +308,58 @@ def predict_prices(close_series, future_days=5):
     except Exception as e:
         predictions["arima"] = {"error": str(e)}
 
-    # LSTM - TensorFlow varsa çalıştır
-    if TF_AVAILABLE:
-        try:
-            from sklearn.preprocessing import MinMaxScaler
+    # LSTM
+    try:
+        model_lstm = tf.keras.Sequential()
+        model_lstm.add(
+            tf.keras.layers.LSTM(
+                50, return_sequences=False, input_shape=(X_lstm.shape[1], 1)
+            )
+        )
+        model_lstm.add(tf.keras.layers.Dense(1))
+        model_lstm.compile(optimizer="adam", loss="mse")
+        from sklearn.preprocessing import MinMaxScaler
 
-            df_lstm = pd.DataFrame({"Close": close_series})
-            scaler = MinMaxScaler()
-            scaled_data = scaler.fit_transform(df_lstm[["Close"]])
+        df_lstm = pd.DataFrame({"Close": close_series})
+        scaler = MinMaxScaler()
+        scaled_data = scaler.fit_transform(df_lstm[["Close"]])
 
-            # Sekans oluştur (önceki 10 gün ile tahmin)
-            sequence_length = 10
-            X_lstm, y_lstm = [], []
-            for i in range(sequence_length, len(scaled_data) - future_days):
-                X_lstm.append(scaled_data[i - sequence_length : i])
-                y_lstm.append(scaled_data[i + future_days - 1])
+        # Sekans oluştur (önceki 10 gün ile tahmin)
+        sequence_length = 10
+        X_lstm, y_lstm = [], []
+        for i in range(sequence_length, len(scaled_data) - future_days):
+            X_lstm.append(scaled_data[i - sequence_length : i])
+            y_lstm.append(scaled_data[i + future_days - 1])
 
-            X_lstm, y_lstm = np.array(X_lstm), np.array(y_lstm)
+        X_lstm, y_lstm = np.array(X_lstm), np.array(y_lstm)
 
-            if len(X_lstm) >= 30:
-                # LSTM model oluştur
-                model_lstm = tf.keras.Sequential(
-                    [
-                        tf.keras.layers.LSTM(
-                            50, return_sequences=False, input_shape=(sequence_length, 1)
-                        ),
-                        tf.keras.layers.Dense(1),
-                    ]
-                )
-                model_lstm.compile(optimizer="adam", loss="mse")
+        if len(X_lstm) >= 30:
+            model_lstm = Sequential()
+            model_lstm.add(
+                LSTM(50, return_sequences=False, input_shape=(X_lstm.shape[1], 1))
+            )
+            model_lstm.add(Dense(1))
+            model_lstm.compile(optimizer="adam", loss="mse")
 
-                # Model eğit
-                model_lstm.fit(X_lstm, y_lstm, epochs=10, batch_size=8, verbose=0)
+            model_lstm.fit(X_lstm, y_lstm, epochs=10, batch_size=8, verbose=0)
 
-                # Tahmin için son 10 gün
-                last_seq = scaled_data[-sequence_length:]
-                last_seq = last_seq.reshape(1, sequence_length, 1)
-                lstm_pred_scaled = model_lstm.predict(last_seq, verbose=0)
-                lstm_pred = scaler.inverse_transform(lstm_pred_scaled)[0][0]
+            # Tahmin için son 10 gün
+            last_seq = scaled_data[-sequence_length:]
+            last_seq = last_seq.reshape(1, sequence_length, 1)
+            lstm_pred_scaled = model_lstm.predict(last_seq, verbose=0)
+            lstm_pred = scaler.inverse_transform(lstm_pred_scaled)[0][0]
 
-                predictions["lstm"] = {
-                    "value": lstm_pred,
-                    "delta": lstm_pred - latest_price,
-                    "confidence": 0.8,  # Sabit güven skoru
-                }
-            else:
-                predictions["lstm"] = {"error": "Yetersiz veri (min 30 örnek gerekli)"}
+            predictions["lstm"] = {
+                "value": lstm_pred,
+                "delta": lstm_pred - latest_price,
+                "confidence": 1.0,  # Eğitim skoru koyulabilir (ör: val_loss vs mean)
+            }
+        else:
+            predictions["lstm"] = {"error": "Yetersiz veri"}
+    except Exception as e:
+        predictions["lstm"] = {"error": str(e)}
 
-        except Exception as e:
-            predictions["lstm"] = {"error": f"LSTM hatası: {str(e)}"}
-    else:
-        predictions["lstm"] = {"error": "TensorFlow yüklü değil - LSTM devre dışı"}
-        # XGBoost
+    # XGBoost
     try:
         # Feature engineering
         df_xgb = pd.DataFrame({"Close": close_series})
@@ -883,14 +376,7 @@ def predict_prices(close_series, future_days=5):
         df_xgb = df_xgb.dropna()
 
         if len(df_xgb) >= 50:
-            feature_cols = [
-                "Close",
-                "SMA_5",
-                "SMA_20",
-                "RSI",
-                "Returns",
-                "Volatility",
-            ]
+            feature_cols = ["Close", "SMA_5", "SMA_20", "RSI", "Returns", "Volatility"]
             X = df_xgb[feature_cols].values
             y = df_xgb["Target"].values
 
@@ -949,236 +435,6 @@ def predict_prices(close_series, future_days=5):
         }
     except:
         predictions["trend"] = {"error": "Trend hesaplanamadı"}
-
-    return predictions
-
-
-class EnhancedRateLimitedDataFetcher(RateLimitedDataFetcher):
-    """Geliştirilmiş veri çekme sınıfı"""
-
-    def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
-        super().__init__(max_retries, base_delay)
-        self.alternative_sources = ["yahoo", "alpha_vantage", "finnhub"]
-
-    def fetch_with_fallback(self, symbol: str, period: str = "3mo"):
-        """Fallback mekanizmalı veri çekme"""
-        for source in self.alternative_sources:
-            try:
-                if source == "yahoo":
-                    return self.fetch_stock_data(symbol, period)
-                # Diğer kaynaklar eklenebilir
-            except:
-                continue
-        return None
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def enhanced_technical_analysis(close_series, high_series, low_series, volume_series):
-    """Geliştirilmiş teknik analiz"""
-    indicators = {}
-    signal_score = 0
-    signal_total = 0
-
-    # Mevcut göstergelere ek olarak:
-
-    try:
-        # Parabolic SAR
-        psar = ta.trend.PSARIndicator(
-            high=high_series, low=low_series, close=close_series
-        )
-        psar_value = psar.psar()
-        if not psar_value.empty:
-            indicators["PSAR"] = psar_value.iloc[-1]
-            current_price = close_series.iloc[-1]
-            if current_price > psar_value.iloc[-1]:
-                signal_score += 0.5
-                indicators["PSAR_Signal"] = "AL"
-            else:
-                signal_score -= 0.5
-                indicators["PSAR_Signal"] = "SAT"
-            signal_total += 0.5
-
-        # Williams %R
-        williams_r = ta.momentum.WilliamsRIndicator(
-            high=high_series, low=low_series, close=close_series
-        )
-        wr_value = williams_r.williams_r()
-        if not wr_value.empty:
-            indicators["Williams_R"] = wr_value.iloc[-1]
-            if wr_value.iloc[-1] < -80:
-                signal_score += 1
-                indicators["Williams_R_Signal"] = "Aşırı Satım - AL"
-            elif wr_value.iloc[-1] > -20:
-                signal_score -= 1
-                indicators["Williams_R_Signal"] = "Aşırı Alım - SAT"
-            else:
-                indicators["Williams_R_Signal"] = "Normal"
-            signal_total += 1
-
-        # Money Flow Index
-        if volume_series is not None and not volume_series.isna().all():
-            mfi = ta.volume.MFIIndicator(
-                high=high_series,
-                low=low_series,
-                close=close_series,
-                volume=volume_series,
-            )
-            mfi_value = mfi.money_flow_index()
-            if not mfi_value.empty:
-                indicators["MFI"] = mfi_value.iloc[-1]
-                if mfi_value.iloc[-1] < 20:
-                    signal_score += 1
-                    indicators["MFI_Signal"] = "Aşırı Satım - AL"
-                elif mfi_value.iloc[-1] > 80:
-                    signal_score -= 1
-                    indicators["MFI_Signal"] = "Aşırı Alım - SAT"
-                else:
-                    indicators["MFI_Signal"] = "Normal"
-                signal_total += 1
-
-        # Aroon
-        aroon = ta.trend.AroonIndicator(high=high_series, low=low_series)
-        aroon_up = aroon.aroon_up()
-        aroon_down = aroon.aroon_down()
-        if not aroon_up.empty and not aroon_down.empty:
-            indicators["Aroon_Up"] = aroon_up.iloc[-1]
-            indicators["Aroon_Down"] = aroon_down.iloc[-1]
-
-            if aroon_up.iloc[-1] > aroon_down.iloc[-1] and aroon_up.iloc[-1] > 70:
-                signal_score += 0.5
-                indicators["Aroon_Signal"] = "Güçlü Yükseliş"
-            elif aroon_down.iloc[-1] > aroon_up.iloc[-1] and aroon_down.iloc[-1] > 70:
-                signal_score -= 0.5
-                indicators["Aroon_Signal"] = "Güçlü Düşüş"
-            else:
-                indicators["Aroon_Signal"] = "Belirsiz"
-            signal_total += 0.5
-
-        # Ichimoku
-        ichimoku = ta.trend.IchimokuIndicator(high=high_series, low=low_series)
-        tenkan = ichimoku.ichimoku_conversion_line()
-        kijun = ichimoku.ichimoku_base_line()
-
-        if not tenkan.empty and not kijun.empty:
-            indicators["Ichimoku_Tenkan"] = tenkan.iloc[-1]
-            indicators["Ichimoku_Kijun"] = kijun.iloc[-1]
-
-            current_price = close_series.iloc[-1]
-            if (
-                current_price > tenkan.iloc[-1]
-                and current_price > kijun.iloc[-1]
-                and tenkan.iloc[-1] > kijun.iloc[-1]
-            ):
-                signal_score += 1
-                indicators["Ichimoku_Signal"] = "Güçlü AL"
-            elif (
-                current_price < tenkan.iloc[-1]
-                and current_price < kijun.iloc[-1]
-                and tenkan.iloc[-1] < kijun.iloc[-1]
-            ):
-                signal_score -= 1
-                indicators["Ichimoku_Signal"] = "Güçlü SAT"
-            else:
-                indicators["Ichimoku_Signal"] = "Nötr"
-            signal_total += 1
-
-    except Exception as e:
-        st.error(f"Gelişmiş teknik analiz hatası: {str(e)}")
-
-    return indicators, signal_score, signal_total
-
-
-@st.cache_data(ttl=300)
-def advanced_predictions(
-    close_series, high_series, low_series, volume_series, future_days=5
-):
-    """Gelişmiş tahmin modeli"""
-    ai_analyzer = AdvancedAIAnalyzer()
-    predictions = {}
-
-    try:
-        # Feature engineering
-        df = pd.DataFrame(
-            {
-                "close": close_series,
-                "high": high_series,
-                "low": low_series,
-                "volume": volume_series if volume_series is not None else 0,
-            }
-        )
-
-        # Technical indicators as features
-        df["rsi"] = ta.momentum.RSIIndicator(close=df["close"]).rsi()
-        df["macd"] = ta.trend.MACD(close=df["close"]).macd()
-        df["bb_upper"] = ta.volatility.BollingerBands(
-            close=df["close"]
-        ).bollinger_hband()
-        df["bb_lower"] = ta.volatility.BollingerBands(
-            close=df["close"]
-        ).bollinger_lband()
-        df["atr"] = ta.volatility.AverageTrueRange(
-            high=df["high"], low=df["low"], close=df["close"]
-        ).average_true_range()
-
-        # Price-based features
-        df["sma_20"] = df["close"].rolling(20).mean()
-        df["sma_50"] = df["close"].rolling(50).mean()
-        df["returns"] = df["close"].pct_change()
-        df["volatility"] = df["returns"].rolling(20).std()
-
-        # Lag features
-        for lag in [1, 2, 3, 5]:
-            df[f"close_lag_{lag}"] = df["close"].shift(lag)
-            df[f"returns_lag_{lag}"] = df["returns"].shift(lag)
-
-        # Target variable
-        df["target"] = df["close"].shift(-future_days)
-
-        # Clean data
-        df_clean = df.dropna()
-
-        if len(df_clean) > 100:  # Yeterli veri varsa
-            feature_cols = [
-                col
-                for col in df_clean.columns
-                if col not in ["target", "close", "high", "low", "volume"]
-            ]
-            X = df_clean[feature_cols].values
-            y = df_clean["target"].values
-
-            # Train/test split
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
-
-            # Ensemble model
-            ensemble_model = ai_analyzer.create_ensemble_model(X_train, y_train)
-
-            if ensemble_model:
-                # Model confidence
-                confidence = ai_analyzer.calculate_model_confidence(
-                    ensemble_model, X_test, y_test
-                )
-
-                # Prediction
-                last_features = df_clean[feature_cols].iloc[-1].values.reshape(1, -1)
-                ensemble_pred = ensemble_model.predict(last_features)[0]
-
-                predictions["ensemble"] = {
-                    "value": ensemble_pred,
-                    "delta": ensemble_pred - close_series.iloc[-1],
-                    "confidence": confidence,
-                    "model_type": "Ensemble (RF+XGB+LR)",
-                }
-
-                # Feature importance
-                importance = ai_analyzer.feature_importance_analysis(
-                    ensemble_model, feature_cols
-                )
-                predictions["feature_importance"] = importance
-
-    except Exception as e:
-        st.error(f"Gelişmiş tahmin hatası: {str(e)}")
 
     return predictions
 
@@ -1326,21 +582,6 @@ st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-
-    st.markdown("### 🎛️ Analiz Seçenekleri")
-
-    # Analiz modları
-    analysis_mode = st.selectbox(
-        "Analiz Modu",
-        ["Standart", "Gelişmiş AI", "Makro Analiz", "Risk Analizi", "Sentiment"],
-        index=1,
-    )
-
-    enable_macro_analysis = st.checkbox("🌍 Makro Analiz", value=True)
-    enable_advanced_charts = st.checkbox("📊 Gelişmiş Grafikler", value=False)
-
-    st.markdown("---")
-
     st.markdown("### ⭐ Favori Yönetimi")
 
     # Favorileri yükle
@@ -1478,8 +719,6 @@ if hisse and (analiz_btn or default_symbol):
         )
         st.stop()
 
-    macro_analyzer = MacroEconomicAnalyzer()
-
     # Veri hazırlama
     close = data["Close"]
     high = data["High"]
@@ -1521,70 +760,6 @@ if hisse and (analiz_btn or default_symbol):
     with col3:
         if company_info["logo"]:
             st.image(company_info["logo"], width=80)
-
-    # Makroekonomik analiz
-    if enable_macro_analysis or analysis_mode == "Makro Analiz":
-        st.markdown("---")
-        st.markdown("### 🌍 Makroekonomik Durum")
-
-        with st.spinner("📊 Makroekonomik veriler analiz ediliyor..."):
-            try:
-                macro_data = macro_analyzer.fetch_macro_data()
-
-                # Veri kontrolü - dictionary ve içerik kontrolü
-                if macro_data and isinstance(macro_data, dict) and len(macro_data) > 0:
-                    macro_impact, macro_analysis = macro_analyzer.analyze_macro_impact(
-                        hisse, macro_data
-                    )
-
-                    # Görsel metrikler
-                    col1, col2, col3, col4 = st.columns(4)
-
-                    with col1:
-                        if "usd_try" in macro_data:
-                            st.metric(
-                                "USD/TRY",
-                                f"{macro_data['usd_try']:.4f}",
-                                delta=f"{macro_data.get('usd_try_change', 0):.2f}%",
-                            )
-
-                with col2:
-                    if "bist100" in macro_data:
-                        st.metric(
-                            "BIST100",
-                            f"{macro_data['bist100']:.0f}",
-                            delta=f"{macro_data.get('bist100_change', 0):.2f}%",
-                        )
-
-                with col3:
-                    if "gold" in macro_data:
-                        st.metric(
-                            "Altın",
-                            f"${macro_data['gold']:.1f}",
-                            delta=f"{macro_data.get('gold_change', 0):.2f}%",
-                        )
-
-                with col4:
-                    if "vix" in macro_data:
-                        st.metric(
-                            "VIX (Korku)",
-                            f"{macro_data['vix']:.1f}",
-                            delta=f"{macro_data.get('vix_change', 0):.2f}%",
-                        )
-
-                # Makro etki analizi
-                if macro_analysis:
-                    st.markdown("#### 📈 Makroekonomik Etki Analizi")
-                    for analysis in macro_analysis:
-                        if "⚠️" in analysis:
-                            st.warning(analysis)
-                        elif "✅" in analysis:
-                            st.success(analysis)
-                        else:
-                            st.info(analysis)
-
-            except Exception as e:
-                st.error(f"Makroekonomik analiz hatası: {str(e)}")
 
     # Ek metrikler
     if any(
@@ -1682,31 +857,16 @@ if hisse and (analiz_btn or default_symbol):
         (signal_score / max(signal_total, 1)) * 100 if signal_total > 0 else 0
     )
 
-    # Makro etki ekleme
-    final_score = normalized_score
-    if "macro_impact" in locals():
-        macro_bonus = macro_impact * 20  # Makro etkiyi % olarak ekle
-        final_score += macro_bonus
-        final_score = max(-100, min(100, final_score))  # -100 ile 100 arasında sınırla
-
     with col1:
-        if final_score >= 50:
+        if normalized_score >= 50:
             st.success(f"### 💹 GÜÇLÜ AL")
-            st.markdown(f"**Sinyal Gücü:** %{final_score:.0f}")
-            if "macro_impact" in locals() and macro_impact > 0:
-                st.caption("🌍 Makro destekli sinyal")
-        # ESKI: elif normalized_score >= 25:
-        # YENİ:
-        elif final_score >= 25:
+            st.markdown(f"**Sinyal Gücü:** %{normalized_score:.0f}")
+        elif normalized_score >= 25:
             st.info(f"### 📈 AL")
-            st.markdown(f"**Sinyal Gücü:** %{final_score:.0f}")
-        # ESKI: elif normalized_score <= -25:
-        # YENİ:
-        elif final_score <= -25:
+            st.markdown(f"**Sinyal Gücü:** %{normalized_score:.0f}")
+        elif normalized_score <= -25:
             st.error(f"### 📉 SAT")
-            st.markdown(f"**Risk Seviyesi:** %{abs(final_score):.0f}")
-            if "macro_impact" in locals() and macro_impact < 0:
-                st.caption("🌍 Makro olumsuz etki")
+            st.markdown(f"**Risk Seviyesi:** %{abs(normalized_score):.0f}")
         else:
             st.warning(f"### ⏸️ BEKLE")
             st.markdown("**Kararsız Bölge**")
@@ -1876,27 +1036,9 @@ if hisse and (analiz_btn or default_symbol):
     st.markdown("### 📈 Grafikler ve Analizler")
 
     # Tab yapısı
-    if enable_advanced_charts:
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-            [
-                "💰 Fiyat & Volume",
-                "📊 RSI",
-                "📉 MACD",
-                "📊 Bollinger",
-                "🎯 Sinyal Özeti",
-                "🌍 Makro Korelasyon",
-            ]
-        )
-    else:
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(
-            [
-                "💰 Fiyat & Volume",
-                "📊 RSI",
-                "📉 MACD",
-                "📊 Bollinger",
-                "🎯 Sinyal Özeti",
-            ]
-        )
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["💰 Fiyat & Volume", "📊 RSI", "📉 MACD", "📊 Bollinger", "🎯 Sinyal Özeti"]
+    )
 
     with tab1:
         # Fiyat ve hacim grafiği
@@ -2252,86 +1394,6 @@ if hisse and (analiz_btn or default_symbol):
             else:
                 st.warning("⏸️ **ÖZET:** BEKLE")
 
-    if enable_advanced_charts:
-        with tab6:
-            st.markdown("#### 🌍 Makroekonomik Korelasyon Analizi")
-
-            try:
-                if "macro_data" in locals() and macro_data:
-                    # Korelasyon matrisi oluştur
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("**📊 Makro Göstergeler**")
-
-                        # USD/TRY ile hisse korelasyonu (BIST için)
-                        if hisse.endswith(".IS") and "usd_try_change" in macro_data:
-                            usd_impact = (
-                                "Olumsuz"
-                                if macro_data["usd_try_change"] > 0
-                                else "Olumlu"
-                            )
-                            st.metric(
-                                "USD/TRY Etkisi",
-                                usd_impact,
-                                delta=f"%{macro_data['usd_try_change']:.2f}",
-                            )
-
-                        # VIX ile risk korelasyonu
-                        if "vix" in macro_data:
-                            risk_level = "Yüksek" if macro_data["vix"] > 25 else "Düşük"
-                            st.metric("Piyasa Risk Seviyesi", risk_level)
-
-                    with col2:
-                        st.markdown("**📈 Sektör Etkisi**")
-
-                        # Sektör bazlı makro etki analizi
-                        if company_info and company_info.get("sector"):
-                            sector = company_info["sector"]
-
-                            # Sektör bazlı USD etkisi
-                            if sector in ["Technology", "Teknoloji"]:
-                                st.info(
-                                    "💻 Teknoloji sektörü: USD artışından olumsuz etkilenir"
-                                )
-                            elif sector in ["Basic Materials", "Temel Malzemeler"]:
-                                st.info(
-                                    "🏭 Temel malzemeler: Emtia fiyatlarından etkilenir"
-                                )
-                            elif sector in ["Financial Services", "Finansal Hizmetler"]:
-                                st.info(
-                                    "🏦 Finans sektörü: Faiz değişimlerinden etkilenir"
-                                )
-                            else:
-                                st.info(f"📊 {sector} sektörü makro analizi")
-
-                    # Görsel korelasyon (basit)
-                    if len(close) > 30:
-                        st.markdown("---")
-                        st.markdown("**📊 Fiyat - Makro Trend Analizi**")
-
-                        # Basit trend karşılaştırması
-                        price_trend = ((close.iloc[-1] / close.iloc[-30]) - 1) * 100
-
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric(
-                                "30 Günlük Hisse Performansı", f"%{price_trend:.2f}"
-                            )
-
-                        with col2:
-                            if "bist100_change" in macro_data:
-                                st.metric(
-                                    "BIST100 Günlük Değişim",
-                                    f"%{macro_data['bist100_change']:.2f}",
-                                )
-
-                else:
-                    st.info("Makroekonomik veri henüz yüklenmedi")
-
-            except Exception as e:
-                st.error(f"Korelasyon analizi hatası: {str(e)}")
-
     # Dışa aktarma seçenekleri
     st.markdown("---")
     st.markdown("### 💾 Rapor ve Dışa Aktarma")
@@ -2396,14 +1458,6 @@ if hisse and (analiz_btn or default_symbol):
                 df_indicators = df_indicators[df_indicators["Değer"] != "Series"]
                 df_indicators.to_excel(writer, sheet_name="Göstergeler", index=False)
 
-                if "macro_data" in locals() and macro_data:
-                    macro_export_data = {
-                        "Gösterge": list(macro_data.keys()),
-                        "Değer": list(macro_data.values()),
-                    }
-                    df_macro = pd.DataFrame(macro_export_data)
-                    df_macro.to_excel(writer, sheet_name="Makro Veriler", index=False)
-
                 # Fiyat verileri
                 price_data = pd.DataFrame(
                     {
@@ -2464,30 +1518,6 @@ if hisse and (analiz_btn or default_symbol):
         **🕐 Son Güncelleme:** {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}
         """
         )
-
-# Test ve debugging
-if st.sidebar.button("🧪 Sistem Testi"):
-    with st.spinner("Test ediliyor..."):
-        try:
-            # Makro analyzer test
-            test_macro = MacroEconomicAnalyzer()
-            test_data = test_macro.fetch_macro_data()
-
-            if test_data:
-                st.success(
-                    f"✅ Makro analiz modülü çalışıyor ({len(test_data)} gösterge)"
-                )
-
-                # Test sonuçlarını göster
-                with st.expander("🔍 Test Sonuçları"):
-                    for key, value in test_data.items():
-                        st.text(f"{key}: {value}")
-            else:
-                st.warning("⚠️ Makro veri alınamadı")
-
-        except Exception as e:
-            st.error(f"❌ Test hatası: {str(e)}")
-
 
 # Footer
 st.markdown("---")
